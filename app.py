@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import json
 
 st.set_page_config(page_title="Health Companion", layout="centered")
 
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
-    div[data-testid="stVerticalBlock"] > div:has(div.stMarkdown) {
+    [data-testid="stVerticalBlock"] > div:has(div.stMarkdown) {
         background-color: white;
         padding: 20px;
         border-radius: 15px;
@@ -17,68 +18,89 @@ st.markdown("""
     .stButton>button {
         width: 100%;
         border-radius: 10px;
-        height: 3em;
-        background-color: #007bff;
+        height: 3.5em;
+        background-color: #000000;
         color: white;
+        border: none;
+        font-weight: bold;
+    }
+    .stTextInput>div>div>input, .stTextArea>div>textarea {
+        border-radius: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-if 'history' not in st.session_state:
-    st.session_state.history = []
-if 'fast_start' not in st.session_state:
-    st.session_state.fast_start = None
+def load_data():
+    if 'health_logs' not in st.session_state:
+        st.session_state.health_logs = []
+
+def save_data():
+    pass 
+
+load_data()
 
 st.title("Health Companion")
 
 with st.container():
-    st.subheader("Physical Profile")
+    st.subheader("Profile")
     col1, col2 = st.columns(2)
-    weight = col1.number_input("Weight (kg)", value=70.0, step=0.1)
-    height = col2.number_input("Height (cm)", value=175.0, step=1.0)
+    weight = col1.number_input("Weight (kg)", value=70.0)
+    height = col2.number_input("Height (cm)", value=170.0)
     
     bmi = weight / ((height/100)**2)
-    st.write(f"Current BMI: **{bmi:.1f}**")
+    status = "Normal"
+    if bmi < 18.5: status = "Underweight"
+    elif bmi >= 25: status = "Overweight"
+    
+    st.info(f"BMI: {bmi:.1f} ({status})")
 
 with st.container():
     st.subheader("Water Fasting")
+    if 'fast_start' not in st.session_state:
+        st.session_state.fast_start = None
+
     if not st.session_state.fast_start:
         if st.button("Start Timer"):
-            st.session_state.fast_start = datetime.now()
+            st.session_state.fast_start = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     else:
-        elapsed = datetime.now() - st.session_state.fast_start
-        hours = elapsed.total_seconds() // 3600
-        st.write(f"Active Fast: **{int(hours)} hours**")
-        if st.button("End Fast"):
+        start_time = datetime.strptime(st.session_state.fast_start, "%Y-%m-%d %H:%M:%S")
+        diff = datetime.now() - start_time
+        hours = diff.total_seconds() / 3600
+        st.write(f"Fast Duration: {hours:.1f} hours")
+        if st.button("Stop Timer"):
             st.session_state.fast_start = None
 
 with st.container():
-    st.subheader("Daily Intake & Activity")
-    meal = st.text_area("What did you eat?", placeholder="Describe your meals...")
-    workout = st.text_area("Workout details", placeholder="Exercises performed...")
-    done = st.checkbox("Daily workout completed")
+    st.subheader("Daily Logs")
+    food = st.text_input("Meal description")
+    exercise = st.text_area("Exercise details")
+    task_done = st.checkbox("Workout completed")
     
-    if st.button("Log Daily Data"):
-        entry = {
+    if st.button("Save Daily Entry"):
+        new_entry = {
             "Date": datetime.now().strftime("%Y-%m-%d"),
-            "Meal": meal,
-            "Workout": workout,
-            "Status": "Completed" if done else "Pending"
+            "Food": food,
+            "Exercise": exercise,
+            "Done": task_done,
+            "Weight": weight
         }
-        st.session_state.history.append(entry)
+        st.session_state.health_logs.append(new_entry)
+        st.success("Entry saved to session")
 
 with st.container():
-    st.subheader("AI Recommendation")
+    st.subheader("AI Coach")
     if weight > 0:
-        if "sugar" in meal.lower() or "carbs" in meal.lower():
-            st.warning("High glucose detected. Suggested: 20 min HIIT session.")
-        elif done:
-            st.success("Target reached. Focus on protein intake and recovery.")
+        if "water" in food.lower() and not food:
+            st.write("Current focus: Hydration maintenance.")
+        elif task_done:
+            st.write("Workout detected. Suggested: High protein meal for muscle recovery.")
+        elif bmi > 25:
+            st.write("Recommendation: 30 mins brisk walking. Limit carb intake tonight.")
         else:
-            st.info("Recommendation: 30 min moderate cardio based on current profile.")
+            st.write("Profile steady. Maintain current movement routine.")
 
-if st.session_state.history:
+if st.session_state.health_logs:
     with st.container():
-        st.subheader("Recent Logs")
-        df = pd.DataFrame(st.session_state.history).tail(5)
-        st.dataframe(df, use_container_width=True)
+        st.subheader("History")
+        history_df = pd.DataFrame(st.session_state.health_logs)
+        st.dataframe(history_df, use_container_width=True)
